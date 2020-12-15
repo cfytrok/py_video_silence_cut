@@ -12,13 +12,14 @@ def runcmd(cmd):
 
 
 def get_silence_level(file_path):
+    """Определяет уровень тишины, как уровень максимальной громкости - 25дБ"""
     stdout = runcmd(['ffmpeg', '-i', file_path, '-af', 'volumedetect', '-vn', '-sn', '-dn', '-f', 'null', 'null'])
     max_volume = re.search(r'max_volume: ([-\d.]+)', stdout).group(1)
     mean_volume = re.search(r'mean_volume: ([-\d.]+)', stdout).group(1)
     return float(max_volume) - 25
 
 
-def get_movie_files(path):
+def get_video_files(path):
     for file in os.listdir(path):
         if os.path.isfile(os.path.join(path, file)) and re.match(r'(.*\.(mp4|avi)$)', file.lower()):
             yield file
@@ -63,6 +64,7 @@ class VideoCutter:
         return intervals_with_sound
 
     def process_ffmpeg_partly(self, intervals_with_sound, in_filename, out_filename):
+        """В выходный файл попадают только интервалы, в которых есть звук"""
         parts = []
         parts.append(
             "[0:v]trim=start=%(start).2f:end=%(end).2f,setpts=PTS-STARTPTS[%(sec_i)sv];[0:a]atrim=start=%(start).2f:end=%(end).2f,asetpts=PTS-STARTPTS[%(sec_i)sa]" % {
@@ -81,7 +83,7 @@ class VideoCutter:
             in_filename, '; '.join(parts), '%sv' % (last_i_count * 2), '%sa' % (last_i_count * 2), out_filename)
         subprocess.run(command)
 
-    def proceess_film(self, in_folder, in_filename, out_folder):
+    def process_video(self, in_folder, in_filename, out_folder):
         # очищаем папку temp или создаем ее
         if os.path.exists(self.tmp_folder):
             shutil.rmtree(self.tmp_folder)
@@ -125,8 +127,8 @@ if __name__ == "__main__":
                         help="Минимальная длительность интервала c тишиной в секундах, что бы он был вырезан (default: 0.5)",
                         type=float, default=0.5)
     parser.add_argument('-sndd', "--sound_duration",
-                        help="Минимальная длительность интервала со звуком в секундах, что бы он прошел на выход (default: 0.2)",
-                        type=float, default=0.2)
+                        help="Минимальная длительность интервала со звуком в секундах, что бы он прошел на выход (default: 0.1)",
+                        type=float, default=0.1)
     parser.add_argument('-bs', "--before_sound_interval",
                         help="Сколько времени в секундах надо добавить до начала звука (default: 0.1)", type=float,
                         default=0.1)
@@ -153,10 +155,10 @@ if __name__ == "__main__":
 
     if not os.path.exists(out_folder):
         os.makedirs(out_folder)
-    in_files = list(get_movie_files(in_folder))
+    in_files = list(get_video_files(in_folder))
 
     vc = VideoCutter(tmp_folder, args.silence_level, args.silence_duration, args.sound_duration,
                      args.before_sound_interval, args.after_sound_interval)
 
     for in_filename in in_files:
-        vc.proceess_film(in_folder, in_filename, out_folder)
+        vc.process_video(in_folder, in_filename, out_folder)
